@@ -38,6 +38,9 @@ ImageProjection::ImageProjection(std::string name, Channel<ProjectionOut>& outpu
   //supress the no intensity found log
   pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
   clock_ = this->get_clock();
+  
+  tf_static_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
+  _pub_projected_image = this->create_publisher<sensor_msgs::msg::Image>("projected_image", 1);
 
   _sub_laser_cloud = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         "lslidar_point_cloud", 2,
@@ -209,6 +212,30 @@ bool ImageProjection::allEssentialTFReady(std::string sensor_frame){
       tf2::Matrix3x3 m(tf2_trans_b2s_.getRotation());
       double roll, pitch, yaw;
       m.getRPY(roll, _sensor_mount_angle, yaw);
+      
+      //@ we got pitch, remove pitch in the tf
+      tf2::Quaternion zero_pitch;
+      zero_pitch.setRPY(0, 0, yaw);
+      tf2_trans_b2s_.setRotation(zero_pitch);
+      trans_b2s_.transform.rotation.x = tf2_trans_b2s_.getRotation().x();
+      trans_b2s_.transform.rotation.y = tf2_trans_b2s_.getRotation().y();
+      trans_b2s_.transform.rotation.z = tf2_trans_b2s_.getRotation().z();
+      trans_b2s_.transform.rotation.w = tf2_trans_b2s_.getRotation().w();
+
+      //@ pubish a static tf for a frame that removing pitch
+      geometry_msgs::msg::TransformStamped trans_sensor2sensor_no_pitch;
+      trans_sensor2sensor_no_pitch.header.frame_id = sensor_frame;
+      trans_sensor2sensor_no_pitch.child_frame_id = sensor_frame+"_pitch_removed";
+      trans_sensor2sensor_no_pitch.transform.translation.x = 0.0; trans_sensor2sensor_no_pitch.transform.translation.y = 0.0; trans_sensor2sensor_no_pitch.transform.translation.z = 0.0;
+      tf2::Quaternion compensate_pitch;
+      compensate_pitch.setRPY(0, -1.0*_sensor_mount_angle, 0);
+      trans_sensor2sensor_no_pitch.transform.rotation.x = compensate_pitch.x();
+      trans_sensor2sensor_no_pitch.transform.rotation.y = compensate_pitch.y();
+      trans_sensor2sensor_no_pitch.transform.rotation.z = compensate_pitch.z();
+      trans_sensor2sensor_no_pitch.transform.rotation.w = compensate_pitch.w();
+      
+      tf_static_broadcaster_->sendTransform(trans_sensor2sensor_no_pitch);
+
 
       // camera to sensor
       tf2::Quaternion qc2s;
@@ -261,6 +288,7 @@ void ImageProjection::cloudHandler(
   pcl::fromROSMsg(*laserCloudMsg, *_laser_cloud_in);
   std::vector<int> indices;
   pcl::removeNaNFromPointCloud(*_laser_cloud_in, *_laser_cloud_in, indices);
+
   int stitcher_num_ = 5;
   //@if not stitch, save copy time
   pcl::PointCloud<PointType>::Ptr pcl_stitched_msg (new pcl::PointCloud<PointType>);
@@ -284,17 +312,19 @@ void ImageProjection::cloudHandler(
   // Copy and remove NAN points
 
   _seg_msg.header = laserCloudMsg->header;
-  
+  _seg_msg.header.stamp = laserCloudMsg->header.stamp;
+  _seg_msg.header.frame_id = laserCloudMsg->header.frame_id+"_pitch_removed";
+
   // transform tilted lidar back to horizontal
-  /*
+  
   geometry_msgs::msg::TransformStamped trans_lidar2horizontal;
   tf2::Quaternion q;
-  q.setRPY( 0, _sensor_mount_angle*1.0, 0);
+  q.setRPY( 0, _sensor_mount_angle, 0);
   trans_lidar2horizontal.transform.rotation.x = q.x(); trans_lidar2horizontal.transform.rotation.y = q.y();
   trans_lidar2horizontal.transform.rotation.z = q.z(); trans_lidar2horizontal.transform.rotation.w = q.w();
   Eigen::Affine3d trans_lidar2horizontal_af3 = tf2::transformToEigen(trans_lidar2horizontal);
   pcl::transformPointCloud(*_laser_cloud_in, *_laser_cloud_in, trans_lidar2horizontal_af3);
-  */
+  
   findStartEndAngle();
   // Range image projection
   projectPointCloud();
@@ -308,6 +338,10 @@ void ImageProjection::cloudHandler(
 
 
 void ImageProjection::projectPointCloud() {
+  
+  //cv image
+  cv::Mat projected_image(_vertical_scans, _horizontal_scans, CV_16UC1, cv::Scalar(0));
+  
   // range image projection
   const size_t cloudSize = _laser_cloud_in->points.size();
 
@@ -336,7 +370,7 @@ void ImageProjection::projectPointCloud() {
     //  continue;
     //}
 
-    int columnIdn = -round((horizonAngle - M_PI_2) / _ang_resolution_X) + _horizontal_scans * 0.5;
+    int columnIdn = -round((horizonAngle) / _ang_resolution_X) + _horizontal_scans * 0.5;
 
     if (columnIdn >= _horizontal_scans){
       columnIdn -= _horizontal_scans;
@@ -346,20 +380,35 @@ void ImageProjection::projectPointCloud() {
       continue;
     }
 
-    if (range < _minimum_detection_range || range>_maximum_detection_range){
+    if (range < _minimum_detection_range || range > _maximum_detection_range){
       continue;
     }
 
     _range_mat(rowIdn, columnIdn) = range;
+    
+    //@ generate projected_image
+    //@ the rowIdn for _range_mat is from top to bottom, which means the line 0 is the first row
+    //@ to visualize the depth image more intuitively, we make line 0 to the last rowIdn
+    // for columnIdn, we need to rotate it 180 degree
+    int viscolumnIdn = -round((horizonAngle) / _ang_resolution_X) + _horizontal_scans * 0.5 + _horizontal_scans * 0.25;
+    if(viscolumnIdn>=_horizontal_scans)
+      viscolumnIdn = viscolumnIdn - _horizontal_scans;
+    if(rowIdn>0 && rowIdn<=_vertical_scans && viscolumnIdn<_horizontal_scans && viscolumnIdn>=0)
+      projected_image.at<unsigned short>(_vertical_scans-rowIdn, viscolumnIdn) = static_cast<unsigned short>(range*1000);
 
     thisPoint.intensity = (float)rowIdn + (float)columnIdn / 10000.0;
-
     size_t index = columnIdn + rowIdn * _horizontal_scans;
     _full_cloud->points[index] = thisPoint;
     // the corresponding range of a point is saved as "intensity"
     _full_info_cloud->points[index] = thisPoint;
     _full_info_cloud->points[index].intensity = range;
   }
+
+  cv_bridge::CvImage img_bridge;
+  img_bridge.image = projected_image;
+  img_bridge.encoding = sensor_msgs::image_encodings::TYPE_16UC1;
+  sensor_msgs::msg::Image::SharedPtr msg = img_bridge.toImageMsg();
+  _pub_projected_image->publish(*msg);
 }
 
 void ImageProjection::findStartEndAngle() {

@@ -99,7 +99,9 @@ class MultiLayerSpinningLidar: public Sensor{
     virtual void onInitialize();
     virtual void selfClear();
     virtual void selfMark();
+    virtual void updateLethalPointCloud();
     virtual pcl::PointCloud<pcl::PointXYZI>::Ptr getObservation();
+    pcl::PointCloud<pcl::PointXYZI>::Ptr getLethal();
     virtual void resetdGraph();
     virtual double get_dGraphValue(const unsigned int index);
     virtual bool isCurrent();
@@ -157,6 +159,8 @@ class MultiLayerSpinningLidar: public Sensor{
     int euclidean_cluster_extraction_min_cluster_size_;
     double euclidean_cluster_extraction_tolerance_;
     int stitcher_num_;
+    double pub_gbl_marking_frequency_;
+    
     /*pub and sub*/
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sensor_sub_;
     
@@ -168,6 +172,7 @@ class MultiLayerSpinningLidar: public Sensor{
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_casting_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_gbl_marking_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_dGraph_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_lethal_;
     
     /**/
     pcl::PointCloud<pcl::PointXYZI>::Ptr pc_current_window_;

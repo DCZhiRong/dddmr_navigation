@@ -49,6 +49,7 @@ public:
   double deceleration_ratio;
 
   /*Motor constraint*/
+  bool use_motor_constraint;
   double max_motor_shaft_rpm;
   double wheel_diameter;
   double gear_ratio;
@@ -67,6 +68,7 @@ public:
       double nmin_vel_theta,
       double nacc_lim_x,
       double nacc_lim_theta,
+      double nuse_motor_constraint,
       double nmax_motor_shaft_rpm,
       double nwheel_diameter,
       double ngear_ratio,
@@ -80,6 +82,7 @@ public:
         min_vel_theta(nmin_vel_theta),
         acc_lim_x(nacc_lim_x),
         acc_lim_theta(nacc_lim_theta),
+        use_motor_constraint(nuse_motor_constraint),
         max_motor_shaft_rpm(nmax_motor_shaft_rpm),
         wheel_diameter(nwheel_diameter),
         gear_ratio(ngear_ratio),

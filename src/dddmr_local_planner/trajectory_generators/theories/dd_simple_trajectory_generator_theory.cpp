@@ -86,6 +86,10 @@ void DDSimpleTrajectoryGeneratorTheory::onInitialize(){
     RCLCPP_FATAL(node_->get_logger().get_child(name_), "The min velocity of the robot should be positive!");
 
   /*Motor constraint*/
+  node_->declare_parameter(name_ + ".use_motor_constraint", rclcpp::ParameterValue(false));
+  node_->get_parameter(name_ + ".use_motor_constraint", limits_->use_motor_constraint);
+  RCLCPP_INFO(node_->get_logger().get_child(name_), "use_motor_constraint: %d", limits_->use_motor_constraint);
+
   node_->declare_parameter(name_ + ".max_motor_shaft_rpm", rclcpp::ParameterValue(3000.0));
   node_->get_parameter(name_ + ".max_motor_shaft_rpm", limits_->max_motor_shaft_rpm);
   RCLCPP_INFO(node_->get_logger().get_child(name_), "max_motor_shaft_rpm: %.2f", limits_->max_motor_shaft_rpm);
@@ -291,6 +295,11 @@ void DDSimpleTrajectoryGeneratorTheory::initialise(){
 }
 
 bool DDSimpleTrajectoryGeneratorTheory::isMotorConstraintSatisfied(Eigen::Vector3f& vel_samp){
+  
+  //@ if we dont want motor constraint, return constraint is atisfied
+  if(!limits_->use_motor_constraint)
+    return true;
+
   double vr,vl;
   vr = vel_samp[0] + limits_->robot_radius * vel_samp[2];
   vl = vel_samp[0] - limits_->robot_radius * vel_samp[2];

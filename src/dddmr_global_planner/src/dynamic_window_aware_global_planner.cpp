@@ -82,6 +82,9 @@ void DWA_GlobalPlanner::initial(const std::shared_ptr<perception_3d::Perception3
   declare_parameter("look_ahead_distance", rclcpp::ParameterValue(5.0));
   this->get_parameter("look_ahead_distance", look_ahead_distance_);
   RCLCPP_INFO(this->get_logger(), "look_ahead_distance: %.2f", look_ahead_distance_);    
+  declare_parameter("recompute_frequency", rclcpp::ParameterValue(10.0));
+  this->get_parameter("recompute_frequency", recompute_frequency_);
+  RCLCPP_INFO(this->get_logger(), "recompute_frequency: %.2f", recompute_frequency_);     
   
   pub_path_ = this->create_publisher<nav_msgs::msg::Path>("awared_global_path", 1);
 
@@ -90,7 +93,7 @@ void DWA_GlobalPlanner::initial(const std::shared_ptr<perception_3d::Perception3
   rclcpp::SubscriptionOptions sub_options;
   sub_options.callback_group = action_server_group_;
 
-  auto loop_time = std::chrono::milliseconds(50);
+  auto loop_time = std::chrono::milliseconds(int(1000/recompute_frequency_));
   threading_timer_ = this->create_wall_timer(loop_time, std::bind(&DWA_GlobalPlanner::determineDWAPlan, this), action_server_group_);
   threading_timer_->cancel();
   //@Create action server
@@ -129,6 +132,14 @@ bool DWA_GlobalPlanner::isNewGoal(){
 void DWA_GlobalPlanner::makePlan(const std::shared_ptr<rclcpp_action::ServerGoalHandle<dddmr_sys_core::action::GetPlan>> goal_handle){
   
   new_goal_ = goal_handle->get_goal()->goal;
+
+  if(!perception_3d_ros_->getSharedDataPtr()->is_static_layer_ready_){
+    RCLCPP_INFO_THROTTLE(this->get_logger(), *clock_, 1000, "Waiting for static layer");
+    threading_timer_->cancel();
+    auto result = std::make_shared<dddmr_sys_core::action::GetPlan::Result>();
+    goal_handle->abort(result);
+    return;
+  }
 
   if(!goal_handle->get_goal()->activate_threading){
     threading_timer_->cancel();
@@ -198,7 +209,7 @@ void DWA_GlobalPlanner::determineDWAPlan(){
   bool dwa_goal_clear = false;
   double look_ahead_step = 0.0;
   int dwa_pivot = 0;
-  while(!dwa_goal_clear){
+  while(rclcpp::ok() && !dwa_goal_clear){
 
     double accumulative_distance = 0.0;
     int pivot = indices[0];
@@ -212,11 +223,20 @@ void DWA_GlobalPlanner::determineDWAPlan(){
       last_point = current_point;
       pivot++;
     }
-    
-    if(pivot>=pcl_global_path_->points.size()){
+
+    if(pivot>=pcl_global_path_->points.size()-1){
       dwa_pivot = pcl_global_path_->points.size()-1;
-      RCLCPP_INFO(this->get_logger(), "DWA goal reach the global path end at: %.2f, %.2f, %.2f", pcl_global_path_->points[dwa_pivot].x, pcl_global_path_->points[dwa_pivot].y, pcl_global_path_->points[dwa_pivot].z);
+      if(recompute_frequency_>2.0)
+        RCLCPP_INFO_THROTTLE(this->get_logger(), *clock_, 5000, "DWA goal reach the global path end at: %.2f, %.2f, %.2f", pcl_global_path_->points[dwa_pivot].x, pcl_global_path_->points[dwa_pivot].y, pcl_global_path_->points[dwa_pivot].z);
+      else
+        RCLCPP_INFO(this->get_logger(), "DWA goal reach the global path end at: %.2f, %.2f, %.2f", pcl_global_path_->points[dwa_pivot].x, pcl_global_path_->points[dwa_pivot].y, pcl_global_path_->points[dwa_pivot].z);
       break;
+    }
+
+    if(look_ahead_distance_+look_ahead_step>100.0){
+      dwa_pivot = pcl_global_path_->points.size()-1;
+      RCLCPP_INFO(this->get_logger(), "Look ahead distance reach unrealistic distance.");
+      break;      
     }
     //check nothing is around dwa goal
     std::vector<int> pointIdxRadiusSearch;
@@ -231,7 +251,7 @@ void DWA_GlobalPlanner::determineDWAPlan(){
     if(pointIdxRadiusSearch.empty()){
       look_ahead_step+=1.0;
       dwa_goal_clear = false;
-      RCLCPP_INFO(this->get_logger(), "No ground is found for DWA goal at: %.2f, %.2f, %.2f", pcl_global_path_->points[pivot].x, pcl_global_path_->points[pivot].y, pcl_global_path_->points[pivot].z);
+      RCLCPP_INFO_THROTTLE(this->get_logger(), *clock_, 1000,  "No ground is found for DWA goal at: %.2f, %.2f, %.2f", pcl_global_path_->points[pivot].x, pcl_global_path_->points[pivot].y, pcl_global_path_->points[pivot].z);
     }
     else{
       for(auto it=pointIdxRadiusSearch.begin();it!=pointIdxRadiusSearch.end();it++){
@@ -241,7 +261,7 @@ void DWA_GlobalPlanner::determineDWAPlan(){
         if(dGraphValue<inscribed_radius){
           look_ahead_step+=1.0;
           dwa_goal_clear = false;
-          RCLCPP_INFO(this->get_logger(), "DWA goal is blocked at: %.2f, %.2f, %.2f", pcl_global_path_->points[pivot].x, pcl_global_path_->points[pivot].y, pcl_global_path_->points[pivot].z);
+          RCLCPP_INFO_THROTTLE(this->get_logger(), *clock_, 1000, "DWA goal is blocked at: %.2f, %.2f, %.2f", pcl_global_path_->points[pivot].x, pcl_global_path_->points[pivot].y, pcl_global_path_->points[pivot].z);
           break;
         }
         else{
