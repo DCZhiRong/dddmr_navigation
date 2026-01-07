@@ -394,7 +394,6 @@ void ImageProjection::projectPointCloud() {
 
     // find the row and column index in the image for this point
     float verticalAngle = std::asin(thisPoint.z / range);
-        //std::atan2(thisPoint.z, sqrt(thisPoint.x * thisPoint.x + thisPoint.y * thisPoint.y));
 
     int rowIdn = (verticalAngle + _ang_bottom) / _ang_resolution_Y;
     if (rowIdn < 0 || rowIdn >= _vertical_scans) {
@@ -421,12 +420,8 @@ void ImageProjection::projectPointCloud() {
     //@ generate projected_image
     //@ the rowIdn for _range_mat is from top to bottom, which means the line 0 is the first row
     //@ to visualize the depth image more intuitively, we make line 0 to the last rowIdn
-    // for columnIdn, we need to rotate it 180 degree
-    //int viscolumnIdn = -round((horizonAngle) / _ang_resolution_X) + _horizontal_scans * 0.5 + _horizontal_scans * 0.25;
-    //if(viscolumnIdn>=_horizontal_scans)
-    //  viscolumnIdn = viscolumnIdn - _horizontal_scans;
+
     if(rowIdn>0 && rowIdn<=_vertical_scans && viscolumnIdn<_horizontal_scans && viscolumnIdn>=0){
-      //projected_image.at<unsigned char>(_vertical_scans-rowIdn, viscolumnIdn) = static_cast<unsigned char>(range*51);
 
       uint16_t scaled_int = static_cast<uint16_t>(range*100);
       // 2. Split the 16-bit integer into high and low bytes
@@ -514,9 +509,9 @@ void ImageProjection::projectPointCloud() {
   _pub_projected_image->publish(*msg);
 
   //@ write depth img
-  double imge_time = _seg_msg.header.stamp.sec + _seg_msg.header.stamp.nanosec/1e9;
+  double image_time = _seg_msg.header.stamp.sec + _seg_msg.header.stamp.nanosec/1e9;
 
-  if(!to_fa_ && imge_time - last_save_depth_img_time_ >= time_step_between_depth_image_){
+  if(!to_fa_ && image_time - last_save_depth_img_time_ >= time_step_between_depth_image_){
     std::string timestamp;
     std::stringstream ss;
     ss << _seg_msg.header.stamp.sec << "_" << std::setw(9) << std::setfill('0') << _seg_msg.header.stamp.nanosec;
@@ -527,7 +522,7 @@ void ImageProjection::projectPointCloud() {
       +"_vstack"+std::to_string(projected_image_stack_size_);
     std::string file_name = mapping_dir_string_ + "/" + timestamp + "_" + spec + ".png";
     cv::imwrite(file_name, projected_stack_result);
-    last_save_depth_img_time_ = imge_time;
+    last_save_depth_img_time_ = image_time;
   }
 
 }
@@ -667,7 +662,7 @@ void ImageProjection::groundRemoval() {
         _label_mat(i, j) = -1;
       }
 #ifdef TRT_ENABLED
-      if(is_trt_engine_exist_){
+      if(is_trt_engine_exist_ && projected_image_queue_.size()==projected_image_stack_size_){
         // it was generated as _range_mat(rowIdn, viscolumnIdn) = range;
         cv::Vec3b pixel = range_mat_removing_moving_object_.at<cv::Vec3b>(_vertical_scans-i, j);
         if(pixel[0]==0 && pixel[1]==0 && pixel[2]==0){
@@ -680,7 +675,7 @@ void ImageProjection::groundRemoval() {
 
   for (size_t i = 0; i <= _ground_scan_index; ++i) {
     for (size_t j = 0; j < _horizontal_scans; ++j) {
-      if (_ground_mat(i, j) == 1)
+      if (_ground_mat(i, j) == 1 && _label_mat(i, j) != -1)
         _ground_cloud->push_back(_full_cloud->points[j + i * _horizontal_scans]);
     }
   }

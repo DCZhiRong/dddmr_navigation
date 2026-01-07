@@ -1,21 +1,21 @@
 bag_reader:
   ros__parameters:
     use_sim_time: true
-    bag_file_dir: "/root/dddmr_bags/robosense_airy"
+    bag_file_dir: "/root/dddmr_bags/emirates_airy"
     point_cloud_topic: "/rslidar_points"
     odometry_topic: "/odom"
-    skip_frame: 2
+    skip_frame: 1
 
 lego_loam_ip:
   ros__parameters:
     use_sim_time: true
     laser:
-        odom_type: "laser_odometry"         #wheel_odometry/laser_odometry 
-        baselink_frame: "base_link"
+        odom_type: "wheel_odometry"         #wheel_odometry/laser_odometry 
+        baselink_frame: "directdrive_base_link"
         #projection is at sensor frame after tilted
-        num_vertical_scans: 192
-        num_horizontal_scans: 450
-        ground_scan_index: 60
+        num_vertical_scans: 100
+        num_horizontal_scans: 400
+        ground_scan_index: 50
         vertical_angle_bottom: -90.0          # degrees
         vertical_angle_top: 90.0            # degrees
         scan_period: 0.1                   # seconds
@@ -24,9 +24,10 @@ lego_loam_ip:
         segment_valid_point_num: 5
         segment_valid_line_num: 2
         segment_theta: 60.0                      # decrese this value may improve accuracy
-        minimum_detection_range: 0.5
+        minimum_detection_range: 0.2
         maximum_detection_range: 100.0            # point cloud within this range will be used to project image
         distance_for_patch_between_rings: 1.0    # patch ground between rings within this range, i.e. ring0 and ring1 is smaller than 1 meter, patch them
+        stitcher_num: 0
 
 lego_loam_fa:
   ros__parameters:
