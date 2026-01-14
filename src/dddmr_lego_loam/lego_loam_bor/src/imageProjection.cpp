@@ -246,44 +246,31 @@ bool ImageProjection::allEssentialTFReady(std::string sensor_frame){
       tf2_trans_b2s_.setRotation(tf2::Quaternion(trans_b2s_.transform.rotation.x, trans_b2s_.transform.rotation.y, trans_b2s_.transform.rotation.z, trans_b2s_.transform.rotation.w));
       tf2_trans_b2s_.setOrigin(tf2::Vector3(trans_b2s_.transform.translation.x, trans_b2s_.transform.translation.y, trans_b2s_.transform.translation.z));
       
+      //@ Get sensor pitch and transform them to correct orientation
+      //@ Generate map2camera_init. This will be used to export final point cloud/pose graph based on map frame
+      //@ "0 0 0 pi/2 0 pi/2 map -> camera_init" and "0 0 0 -pi/2 -pi/2 0 camera -> base_link"
+      //@affine_3d for pcl conversion, tf2::stamped for key_pose
+      
+      trans_m2ci_.header.frame_id = "map";
+      trans_m2ci_.child_frame_id = "camera_init";
+      tf2::Quaternion qm2ci;
       tf2::Matrix3x3 m(tf2_trans_b2s_.getRotation());
-      double roll;
-      m.getRPY(roll, _sensor_mount_angle, _sensor_yaw_angle);
+      double sensor_install_roll, sensor_install_pitch, sensor_install_yaw;
+      m.getRPY(sensor_install_roll, sensor_install_pitch, sensor_install_yaw);
+      qm2ci.setRPY(1.570795 + sensor_install_pitch, 0.0, 1.570795);
+      trans_m2ci_.transform.translation.x = 0.0; trans_m2ci_.transform.translation.y = 0.0; trans_m2ci_.transform.translation.z = 0.0;
+      trans_m2ci_.transform.rotation.x = qm2ci.x(); trans_m2ci_.transform.rotation.y = qm2ci.y();
+      trans_m2ci_.transform.rotation.z = qm2ci.z(); trans_m2ci_.transform.rotation.w = qm2ci.w();
       
-      //@ we got pitch, remove pitch in the tf
-      tf2::Quaternion zero_pitch;
-      zero_pitch.setRPY(0, 0, _sensor_yaw_angle);
-      tf2_trans_b2s_.setRotation(zero_pitch);
-      trans_b2s_.transform.rotation.x = tf2_trans_b2s_.getRotation().x();
-      trans_b2s_.transform.rotation.y = tf2_trans_b2s_.getRotation().y();
-      trans_b2s_.transform.rotation.z = tf2_trans_b2s_.getRotation().z();
-      trans_b2s_.transform.rotation.w = tf2_trans_b2s_.getRotation().w();
-
-      //@ pubish a static tf for a frame that removing pitch
-      geometry_msgs::msg::TransformStamped trans_sensor2sensor_no_pitch;
-      trans_sensor2sensor_no_pitch.header.frame_id = sensor_frame;
-      trans_sensor2sensor_no_pitch.child_frame_id = sensor_frame+"_pitch_removed";
-      trans_sensor2sensor_no_pitch.transform.translation.x = 0.0; trans_sensor2sensor_no_pitch.transform.translation.y = 0.0; trans_sensor2sensor_no_pitch.transform.translation.z = 0.0;
-      tf2::Quaternion compensate_pitch;
-      compensate_pitch.setRPY(0, -1.0*_sensor_mount_angle, 0);
-      trans_sensor2sensor_no_pitch.transform.rotation.x = compensate_pitch.x();
-      trans_sensor2sensor_no_pitch.transform.rotation.y = compensate_pitch.y();
-      trans_sensor2sensor_no_pitch.transform.rotation.z = compensate_pitch.z();
-      trans_sensor2sensor_no_pitch.transform.rotation.w = compensate_pitch.w();
+      tf_static_broadcaster_->sendTransform(trans_m2ci_);
       
-      tf_static_broadcaster_->sendTransform(trans_sensor2sensor_no_pitch);
-
-
       // camera to sensor
       tf2::Quaternion qc2s;
-      qc2s.setRPY(0,-1.570795,-1.570795);
+      qc2s.setRPY(0, -1.570795, -1.570795);
       tf2_trans_c2s_.setOrigin(tf2::Vector3(0, 0, 0));
       tf2_trans_c2s_.setRotation(qc2s);
       
-      //camera to base_link/base_footprint
-      tf2_trans_c2b_.mult(tf2_trans_c2s_, tf2_trans_b2s_.inverse());
       got_baselink2sensor_tf_= true;
-
 
       trans_c2s_.transform.translation.x = tf2_trans_c2s_.getOrigin().x(); 
       trans_c2s_.transform.translation.y = tf2_trans_c2s_.getOrigin().y(); 
@@ -292,15 +279,7 @@ bool ImageProjection::allEssentialTFReady(std::string sensor_frame){
       trans_c2s_.transform.rotation.y = tf2_trans_c2s_.getRotation().y();
       trans_c2s_.transform.rotation.z = tf2_trans_c2s_.getRotation().z();
       trans_c2s_.transform.rotation.w = tf2_trans_c2s_.getRotation().w();
-      
-      trans_c2b_.child_frame_id = baselink_frame_;
-      trans_c2b_.transform.translation.x = tf2_trans_c2b_.getOrigin().x(); 
-      trans_c2b_.transform.translation.y = tf2_trans_c2b_.getOrigin().y(); 
-      trans_c2b_.transform.translation.z = tf2_trans_c2b_.getOrigin().z();
-      trans_c2b_.transform.rotation.x = tf2_trans_c2b_.getRotation().x();
-      trans_c2b_.transform.rotation.y = tf2_trans_c2b_.getRotation().y();
-      trans_c2b_.transform.rotation.z = tf2_trans_c2b_.getRotation().z();
-      trans_c2b_.transform.rotation.w = tf2_trans_c2b_.getRotation().w();
+
       return true;
     }
     catch (tf2::TransformException& e)
@@ -348,10 +327,10 @@ void ImageProjection::cloudHandler(
 
   _seg_msg.header = laserCloudMsg->header;
   _seg_msg.header.stamp = laserCloudMsg->header.stamp;
-  _seg_msg.header.frame_id = laserCloudMsg->header.frame_id+"_pitch_removed";
+  _seg_msg.header.frame_id = laserCloudMsg->header.frame_id;
 
   // transform tilted lidar back to horizontal
-  
+  /*
   geometry_msgs::msg::TransformStamped trans_lidar2horizontal;
   tf2::Quaternion q;
   q.setRPY( 0, _sensor_mount_angle, 0);
@@ -359,7 +338,8 @@ void ImageProjection::cloudHandler(
   trans_lidar2horizontal.transform.rotation.z = q.z(); trans_lidar2horizontal.transform.rotation.w = q.w();
   Eigen::Affine3d trans_lidar2horizontal_af3 = tf2::transformToEigen(trans_lidar2horizontal);
   pcl::transformPointCloud(*_laser_cloud_in, *_laser_cloud_in, trans_lidar2horizontal_af3);
-  
+  */
+
   findStartEndAngle();
   // Range image projection
   projectPointCloud();
@@ -858,8 +838,8 @@ void ImageProjection::publishClouds() {
   out.patched_ground.reset(new pcl::PointCloud<PointType>());
   out.patched_ground_edge.reset(new pcl::PointCloud<PointType>());
   out.trans_c2s = trans_c2s_;
-  out.trans_c2b = trans_c2b_;
   out.trans_b2s = trans_b2s_;
+  out.trans_m2ci = trans_m2ci_;
   out.odom_type = odom_type_;
   out.vertical_scans = _vertical_scans;
   out.horizontal_scans = _horizontal_scans;

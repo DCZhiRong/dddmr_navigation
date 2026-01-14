@@ -86,8 +86,6 @@ class ImageProjection : public rclcpp::Node
     int _segment_valid_point_num;
     int _segment_valid_line_num;
     int _ground_scan_index;
-    double _sensor_mount_angle;
-    double _sensor_yaw_angle;
     std::string odom_type_;
     std::string baselink_frame_, sensor_frame_;
 
@@ -119,10 +117,11 @@ class ImageProjection : public rclcpp::Node
     int first_frame_processed_;
     bool got_baselink2sensor_tf_;
     geometry_msgs::msg::TransformStamped trans_b2s_;
-    tf2::Transform tf2_trans_b2s_, tf2_trans_c2s_, tf2_trans_c2b_;
+    tf2::Transform tf2_trans_b2s_, tf2_trans_c2s_;
     geometry_msgs::msg::TransformStamped trans_c2s_;
     geometry_msgs::msg::TransformStamped trans_c2b_;
-
+    geometry_msgs::msg::TransformStamped trans_m2ci_;
+    
     //@ list of pointcloud sticher for non-repetitive scan lidar
     std::list<pcl::PointCloud<PointType>> pcl_stitcher_;    
     std::shared_ptr<tf2_ros::StaticTransformBroadcaster> tf_static_broadcaster_;
