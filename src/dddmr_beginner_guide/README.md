@@ -69,7 +69,7 @@ source install/setup.bash && ros2 launch p2p_move_base go2_localization.launch
 
 
 
-<details><summary><h2>💡 DDDMR Navigation with a Real Robot (Coming soon..)</h2></summary>
+<summary><h2>💡 DDDMR Navigation with a Real Robot (Coming soon..)</h2></summary>
 ## ✨ Start DDDMR Navigation with a Real Robot
 You should be able to run DDDMR Navigation like a charm if your system meet following requirements:
 
