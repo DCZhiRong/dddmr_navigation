@@ -657,7 +657,7 @@ void ImageProjection::zPitchRollFeatureRemoval() {
 
       if(in_ground_fov){
 
-        PointType lowerInd_pt_no_pitch;
+        PointType lowerInd_pt_no_pitch, upperInd_pt_no_pitch;
         PointType lowerInd_left_pt_no_pitch;
         PointType lowerInd_right_pt_no_pitch;
         bool valid_point = false;
@@ -737,22 +737,27 @@ void ImageProjection::zPitchRollFeatureRemoval() {
 
         if(!valid_point || dz_left>0.05 || dz_right>0.05 || dz_left2right>0.05){
           do_patch = false;
+          _segmented_cloud_pure->push_back(_full_cloud->points[lowerInd]);
           continue;
         }
 
         if(i<closest_ring_edge) //we dont casting the last one
           closest_ring_edge = i;
 
+        lowerInd_pt_no_pitch = _full_cloud_no_pitch[lowerInd];
+        upperInd_pt_no_pitch = _full_cloud_no_pitch[upperInd];
+
         PointType lowerInd_pt = _full_cloud->points[lowerInd];
         PointType upperInd_pt = _full_cloud->points[upperInd];
 
-        float dXg = upperInd_pt.x - lowerInd_pt.x;
-        float dYg = upperInd_pt.y - lowerInd_pt.y;
-        float dZg = upperInd_pt.z - lowerInd_pt.z;
+        float dXg = upperInd_pt_no_pitch.x - lowerInd_pt_no_pitch.x;
+        float dYg = upperInd_pt_no_pitch.y - lowerInd_pt_no_pitch.y;
+        float dZg = upperInd_pt_no_pitch.z - lowerInd_pt_no_pitch.z;
 
         float vertical_angle = std::atan2(dZg , sqrt(dXg * dXg + dYg * dYg));
-        if ( fabs(vertical_angle - sensor_install_pitch_) > ground_slope_tolerance_) {
+        if ( fabs(vertical_angle) > ground_slope_tolerance_ && fabs(dZg)>0.03) {
           do_patch = false;
+          _segmented_cloud_pure->push_back(_full_cloud->points[lowerInd]);
           continue;
         }
         float ds = sqrt(dX*dX + dY*dY + dZ*dZ);
@@ -778,7 +783,9 @@ void ImageProjection::zPitchRollFeatureRemoval() {
           do_patch = true;
         }
       }
-
+      else{
+        _segmented_cloud_pure->push_back(_full_cloud->points[lowerInd]);
+      }
     }
     
     //@ we have ring edge, mark intensity for those edge points
