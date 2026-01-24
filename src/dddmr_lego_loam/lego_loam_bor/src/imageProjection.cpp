@@ -789,7 +789,7 @@ void ImageProjection::zPitchRollFeatureRemoval() {
     }
     
     //@ we have ring edge, mark intensity for those edge points
-    size_t ringEdgeInd = j + ring_edge*_horizontal_scans;
+    size_t ringEdgeInd = j + (ring_edge-1)*_horizontal_scans;
     PointType a_pt = _full_cloud->points[ringEdgeInd];
     a_pt.intensity = 100;
     patched_ground_edge_->push_back(a_pt);
