@@ -250,6 +250,7 @@ int main(int argc, char** argv) {
       MO->pcdSaver(request, response);
       BR->save_current_map_ = false;
     }
+    
     rclcpp::spin_some(BR); 
   }
   std::shared_ptr<std_srvs::srv::Empty::Request> request;

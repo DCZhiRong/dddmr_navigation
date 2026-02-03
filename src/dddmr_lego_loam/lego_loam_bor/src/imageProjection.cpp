@@ -662,7 +662,7 @@ void ImageProjection::zPitchRollFeatureRemoval() {
       float vertical_angle = std::atan2(dZ , sqrt(dX * dX + dY * dY));
 
       // zPitchRoll feature
-      if ( (vertical_angle) <= 5 * DEG_TO_RAD) {
+      if ( fabs(vertical_angle-sensor_install_pitch_) <= 5 * DEG_TO_RAD) {
         _ground_mat(i, j) = 1;
         _ground_mat(i + 1, j) = 1;
         _z_pitch_roll_decisive_feature_cloud->push_back(_full_cloud->points[upperInd]);
@@ -1043,7 +1043,7 @@ void ImageProjection::publishClouds() {
 
   //PublishCloud(_pub_outlier_cloud, _outlier_cloud);
   //PublishCloud(_pub_segmented_cloud, _segmented_cloud);
-  PublishCloud(_pub_ground_cloud, patched_ground_);
+  PublishCloud(_pub_ground_cloud, _z_pitch_roll_decisive_feature_cloud);
   PublishCloud(_pub_segmented_cloud_pure, _segmented_cloud_pure);
   //PublishCloud(_pub_full_info_cloud, _full_info_cloud);
   if (_pub_segmented_cloud_info->get_subscription_count() != 0) {
