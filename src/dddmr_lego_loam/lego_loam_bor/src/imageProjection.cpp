@@ -910,6 +910,10 @@ void ImageProjection::cloudSegmentation() {
         if (_ground_mat(i, j) == 1) {
           if (j % 5 != 0 && j > 5 && j < _horizontal_scans - 5) continue;
         }
+        // remove nan
+
+        if(!pcl::isFinite(_full_cloud->points[j + i * _horizontal_scans]))
+          continue;
         // mark ground points so they will not be considered as edge features
         // later
         _seg_msg.segmented_cloud_ground_flag[sizeOfSegCloud] =
