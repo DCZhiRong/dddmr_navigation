@@ -194,6 +194,14 @@ ImageProjection::ImageProjection(std::string name, Channel<ProjectionOut>& outpu
   this->get_parameter("imageProjection.ground_slope_tolerance", ground_slope_tolerance_);
   RCLCPP_INFO(this->get_logger(), "imageProjection.ground_slope_tolerance: %.6f", ground_slope_tolerance_);
 
+  declare_parameter("imageProjection.ground_dz_tolerance", rclcpp::ParameterValue(0.1));
+  this->get_parameter("imageProjection.ground_dz_tolerance", ground_dz_tolerance_);
+  RCLCPP_INFO(this->get_logger(), "imageProjection.ground_dz_tolerance: %.6f", ground_dz_tolerance_);
+
+  declare_parameter("imageProjection.distance_from_lidar2_ground", rclcpp::ParameterValue(0.3));
+  this->get_parameter("imageProjection.distance_from_lidar2_ground", distance_from_lidar2_ground_);
+  RCLCPP_INFO(this->get_logger(), "imageProjection.distance_from_lidar2_ground: %.6f", distance_from_lidar2_ground_);
+
   declare_parameter("imageProjection.patch_first_ring_to_baselink", rclcpp::ParameterValue(true));
   this->get_parameter("imageProjection.patch_first_ring_to_baselink", patch_first_ring_to_baselink_);
   RCLCPP_INFO(this->get_logger(), "imageProjection.patch_first_ring_to_baselink: %d", patch_first_ring_to_baselink_);
@@ -613,7 +621,7 @@ void ImageProjection::zPitchRollFeatureRemoval() {
   patched_ground_->points.clear();
   patched_ground_edge_->points.clear();
 
-  for (size_t j = 0; j < _horizontal_scans; ++j) {
+  for (size_t j = 1; j < _horizontal_scans; ++j) {
     size_t ring_edge = 0;
     size_t closest_ring_edge = _vertical_scans-1;
     bool do_patch = false;
@@ -715,13 +723,13 @@ void ImageProjection::zPitchRollFeatureRemoval() {
         PointType lowerInd_left_pt_no_pitch;
         PointType lowerInd_right_pt_no_pitch;
         bool valid_point = false;
-        size_t horizontal_search_number = 50;
+        size_t horizontal_search_number = 20;
         if(j<horizontal_search_number){
           lowerInd_pt_no_pitch = _full_cloud_no_pitch[lowerInd];
           for(int jj=1;jj<horizontal_search_number;jj++){
             size_t compensateInd = 0;
-            if(lowerInd-jj<0){
-              compensateInd = lowerInd-jj+_horizontal_scans;
+            if(lowerInd<jj){
+              compensateInd = _horizontal_scans+lowerInd-jj;
             }
             else{
               compensateInd = lowerInd-jj;
@@ -790,9 +798,9 @@ void ImageProjection::zPitchRollFeatureRemoval() {
         double dz_left2right = fabs(lowerInd_left_pt_no_pitch.z - lowerInd_right_pt_no_pitch.z);
 
         if(!valid_point || dz_left>0.05 || dz_right>0.05 || dz_left2right>0.05){
-          do_patch = false;
-          _segmented_cloud_pure->push_back(_full_cloud->points[lowerInd]);
-          continue;
+          //do_patch = false;
+          //_segmented_cloud_pure->push_back(_full_cloud->points[lowerInd]);
+          //continue;
         }
 
         if(i<closest_ring_edge) //we dont casting the last one
@@ -809,7 +817,7 @@ void ImageProjection::zPitchRollFeatureRemoval() {
         float dZg = upperInd_pt_no_pitch.z - lowerInd_pt_no_pitch.z;
 
         float vertical_angle = std::atan2(dZg , sqrt(dXg * dXg + dYg * dYg));
-        if ( fabs(vertical_angle) > ground_slope_tolerance_ && fabs(dZg)>0.03) {
+        if ( fabs(vertical_angle) > ground_slope_tolerance_ && fabs(dZg)>ground_dz_tolerance_) {
           do_patch = false;
           _segmented_cloud_pure->push_back(_full_cloud->points[lowerInd]);
           continue;
@@ -838,7 +846,8 @@ void ImageProjection::zPitchRollFeatureRemoval() {
         }
       }
       else{
-        _segmented_cloud_pure->push_back(_full_cloud->points[lowerInd]);
+        if(i>0 && _full_cloud_no_pitch.points[lowerInd].z > -distance_from_lidar2_ground_)
+          _segmented_cloud_pure->push_back(_full_cloud->points[lowerInd]);
       }
     }
     
